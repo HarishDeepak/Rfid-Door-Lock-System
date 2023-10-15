@@ -1,96 +1,98 @@
+#include <SPI.h>
+#include <MFRC522.h>
 #include <Wire.h>
-#include <Servo.h>
+#include <LiquidCrystal_I2C.h>
 
-#define button A1
-#define latch A0
-#define buzzer 7
+#define RST_PIN 9
+#define SS_PIN 10
 
-String MasterTag = "8D8C4CD3";
-String MasterTag1 = "9CAE54A1";
-String tagID = "";
-byte cardUID[4];
 byte key = 77;
+byte readCard[4];
+String tagID = "";
 
-Servo doorlock;
-char c;
-int i = 0;
-bool door = false;
+MFRC522 mfrc522(SS_PIN, RST_PIN);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 void setup() {
-  Wire.begin(8);
-  Wire.onReceive(receiveEvent);
+  SPI.begin();
+  mfrc522.PCD_Init();
   Serial.begin(9600);
-  doorlock.attach(9);
-  doorlock.write(0);
-  pinMode(2, OUTPUT);
-  digitalWrite(2, HIGH);
-  pinMode(buzzer, OUTPUT);
-  digitalWrite(buzzer, LOW);
+  Wire.begin();
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.print(" Access Control ");
+  lcd.setCursor(0, 1);
+  lcd.print("Scan Your Card>>");
+  pinMode(2, INPUT);
 }
 
-void loop() {
-  if (door)
-    door_open();
-  int a = analogRead(button);
-  if (a > 900)
-    door_open();
-  delay(100);
+void access_granted() {
+  Serial.println("Granted");
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Door opened");
+  key += 5;
+  return;
 }
 
-void decrypt() {
-  Serial.println("Decrypt");
+void encrypt() {
   for (int i = 0; i < 4; i++) {
-    Serial.print(cardUID[i], HEX);
-    cardUID[i] = cardUID[i] ^ key;
+    Serial.print(readCard[i], HEX);
+    readCard[i] = readCard[i] ^ key;
   }
   Serial.println();
-  for (int i = 0; i < 4; i++) {
-    tagID.concat(String(cardUID[i], HEX));
-  }
-  tagID.toUpperCase();
-  Serial.println(tagID);
-  Serial.println("Decrypt - over");
-  checkTag();
+  for (int i = 0; i < 4; i++)
+    Serial.print(readCard[i], HEX);
+  Serial.println();
 }
 
-void receiveEvent(int a) {
-  while (Wire.available()) {
-    c = Wire.read();
-    if (c != '\0') {
-      Serial.print(c);
-      cardUID[i] = (int)c;
-      i++;
-    } else if (c == '\0')
-      decrypt();
-    Serial.println();
-  }
+void door_reset() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(" Access Control ");
+  lcd.setCursor(0, 1);
+  lcd.print("Scan Your Card>>");
+  return;
 }
 
-void door_open() {
-  Serial.println(tagID.equals(MasterTag));
-  digitalWrite(2, LOW);
-  doorlock.write(180);
-  delay(2500);
-  int a = analogRead(latch);
-  long int start_t = millis();
-  while (a > 900) {
-    a = analogRead(latch);
-    if ((millis() - start_t) > 3000)
-      digitalWrite(buzzer, HIGH);
+int b = 1;
+
+void loop() {
+  while (getID()) {
+    Serial.println(tagID);
+    sendTag();
   }
-  digitalWrite(buzzer, LOW);
-  doorlock.write(0);
-  digitalWrite(2, HIGH);
-  key += 5;
-  door = false;
+  int a = digitalRead(2);
+  if (a == 0 && a != b)
+    access_granted();
+  else if (a == 1 && a != b)
+    door_reset();
+  b = a;
 }
 
-void checkTag() {
-  if (tagID.equals(MasterTag) || tagID.equals(MasterTag1)) {
-    door = true;
-  } else {
-    delay(4000);
+void sendTag() {
+  encrypt();
+  Wire.beginTransmission(8);
+  for (int i = 0; i < 4; i++)
+    Wire.write((char)readCard[i]);
+  Wire.write('\0');
+  Wire.endTransmission();
+}
+
+boolean getID() {
+  if (!mfrc522.PICC_IsNewCardPresent()) {
+    return false;
+  }
+  if (!mfrc522.PICC_ReadCardSerial()) {
+    return false;
   }
   tagID = "";
-  i = 0;
+  for (uint8_t i = 0; i < 4; i++) {
+    readCard[i] = mfrc522.uid.uidByte[i];
+    tagID.concat(String(mfrc522.uid.uidByte[i], HEX));
+  }
+  tagID.toUpperCase();
+  mfrc522.PICC_HaltA();
+  return true;
 }
