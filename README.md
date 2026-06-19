@@ -4,7 +4,7 @@ Dual-unit Arduino-based smart door lock with XOR-encrypted RFID authentication, 
 
 [![Arduino](https://img.shields.io/badge/Arduino-00979D?style=for-the-badge&logo=arduino&logoColor=white)](https://arduino.cc)
 [![Embedded C](https://img.shields.io/badge/Embedded_C-A8B9CC?style=for-the-badge&logo=c&logoColor=white)](https://arduino.cc)
-[![LinkedIn](https://img.shields.io/badge/linkedin-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/harishdeepak/)
+
 
 ---
 
